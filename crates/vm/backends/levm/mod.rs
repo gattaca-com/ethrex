@@ -1814,7 +1814,7 @@ impl LEVM {
     pub fn validate_tx_execution(
         bal_idx: u32,
         seed_idx: u32,
-        current_state: &FxHashMap<Address, LevmAccount>,
+        current_state: &CacheDB,
         codes: &FxHashMap<H256, Code>,
         bal: &BlockAccessList,
         index: &BalAddressIndex,
