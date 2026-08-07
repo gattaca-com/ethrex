@@ -354,7 +354,10 @@ impl GeneralizedDatabase {
     // ================== Account related functions =====================
     /// Loads account
     /// If it's the first time it's loaded store it in `initial_accounts_state` and also cache it in `current_accounts_state` for making changes to it
-    fn load_account(&mut self, address: Address) -> Result<&mut LevmAccount, InternalError> {
+    pub(crate) fn load_account(
+        &mut self,
+        address: Address,
+    ) -> Result<&mut LevmAccount, InternalError> {
         if let Some(tracker) = &mut self.accessed_accounts {
             tracker.insert(address);
         }
@@ -844,13 +847,15 @@ impl<'a> VM<'a> {
 
     */
     pub fn get_account_mut(&mut self, address: Address) -> Result<&mut LevmAccount, InternalError> {
-        // Backup must be taken before mark_modified flips `exists` to true.
-        let account = self.db.get_account(address)?;
+        // Single cache load (was get_account + get_account_mut = two `load_account`
+        // lookups). Snapshot the call-frame backup from the `&mut` BEFORE
+        // `mark_modified` (backup must capture pre-modification state), then mark.
+        // `self.db` and `self.current_call_frame` are disjoint fields.
+        let account = self.db.load_account(address)?;
         self.current_call_frame
             .call_frame_backup
             .backup_account_info(address, account)?;
-
-        let account = self.db.get_account_mut(address)?;
+        account.mark_modified();
         Ok(account)
     }
 
