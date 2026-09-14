@@ -1267,6 +1267,22 @@ impl Blockchain {
 
         let state_root = ret_acount_updates_list.state_trie_hash;
 
+        self.finalize_payload_with_state_root(context, state_root, account_updates, block_access_list)
+    }
+
+    /// `finalize_payload` for a caller that already holds the post-state root.
+    ///
+    /// A builder that advances one trie across successive payloads on the same
+    /// parent computes the root incrementally, so re-deriving it here would
+    /// repeat the whole walk. Every other header field is filled exactly as
+    /// `finalize_payload` fills it; only the source of `state_root` differs.
+    pub fn finalize_payload_with_state_root(
+        &self,
+        context: &mut PayloadBuildContext,
+        state_root: H256,
+        account_updates: Vec<AccountUpdate>,
+        block_access_list: Option<BlockAccessList>,
+    ) -> Result<(), ChainError> {
         context.payload.header.state_root = state_root;
         context.payload.header.transactions_root =
             compute_transactions_root(&context.payload.body.transactions, &NativeCrypto);

@@ -1579,6 +1579,20 @@ impl Blockchain {
         skip_all,
         fields(namespace = "block_execution")
     )]
+    /// `handle_merkleization_bal_from_updates` for callers outside this crate.
+    ///
+    /// A builder merging blocks onto a fixed parent needs the same parallel
+    /// per-account walk this uses; the serial
+    /// `Store::apply_account_updates_from_trie_batch` is the only public route
+    /// today and costs an order of magnitude more.
+    pub fn merkleize_updates(
+        &self,
+        prepared: FxHashMap<Address, BalSynthesisItem>,
+        parent_header: &BlockHeader,
+    ) -> Result<AccountUpdatesList, StoreError> {
+        self.handle_merkleization_bal_from_updates(prepared, parent_header)
+    }
+
     fn handle_merkleization_bal_from_updates(
         &self,
         prepared: FxHashMap<Address, BalSynthesisItem>,
