@@ -1580,6 +1580,20 @@ impl Blockchain {
         result
     }
 
+    /// `handle_merkleization_bal_from_updates` for callers outside this crate.
+    ///
+    /// A builder merging blocks onto a fixed parent needs the same parallel
+    /// per-account walk this uses; the serial
+    /// `Store::apply_account_updates_from_trie_batch` is the only public route
+    /// today and costs an order of magnitude more.
+    pub fn merkleize_updates(
+        &self,
+        prepared: SeededHashMap<Address, BalSynthesisItem>,
+        parent_header: &BlockHeader,
+    ) -> Result<AccountUpdatesList, StoreError> {
+        self.handle_merkleization_bal_from_updates(prepared, parent_header)
+    }
+
     /// Validation path synthesizes `BalSynthesisItem`s from the input BAL pre-execution and
     /// merkleizes optimistically in parallel with EVM execution. Two gates guard the result:
     /// (1) the EIP-7928 `block_access_list_hash` commitment check, and
