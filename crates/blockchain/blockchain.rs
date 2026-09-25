@@ -1345,6 +1345,26 @@ impl Blockchain {
         ))
     }
 
+    /// `handle_merkleization` for a caller that drives execution itself.
+    ///
+    /// A block validator outside this crate runs its own transaction loop, so it
+    /// cannot use `execute_block_pipeline`, but can stream the same per-batch
+    /// `get_state_transitions_tx` diffs into this merkleizer while it executes.
+    /// Returns the merged updates alongside the trie changes, since draining
+    /// leaves the EVM holding only the last batch. The pool rule of
+    /// `default_with_store_and_pool` applies: one concurrent caller per pool.
+    pub fn merkleize_stream(
+        &self,
+        rx: Receiver<Vec<AccountUpdate>>,
+        parent_header: &BlockHeader,
+        queue_length: &AtomicUsize,
+    ) -> Result<(AccountUpdatesList, Vec<AccountUpdate>), StoreError> {
+        let mut max_queue_length = 0;
+        let (updates_list, accumulated) =
+            self.handle_merkleization(rx, parent_header, queue_length, &mut max_queue_length, true)?;
+        Ok((updates_list, accumulated.unwrap_or_default()))
+    }
+
     #[instrument(
         level = "trace",
         name = "Trie update",
