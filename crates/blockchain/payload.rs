@@ -1260,34 +1260,56 @@ impl Blockchain {
 
         let account_updates = context.vm.get_state_transitions()?;
 
-        let ret_acount_updates_list = self
-            .storage
-            .apply_account_updates_batch(context.parent_hash(), &account_updates)?
-            .ok_or(ChainError::ParentStateNotFound)?;
+        let parent_hash = context.parent_hash();
+        let (state, roots) = rayon::join(
+            || self.storage.apply_account_updates_batch(parent_hash, &account_updates),
+            || Self::body_roots(context),
+        );
+        let state_root = state?.ok_or(ChainError::ParentStateNotFound)?.state_trie_hash;
 
-        let state_root = ret_acount_updates_list.state_trie_hash;
+        self.finalize_payload_with_roots(context, state_root, roots, None, account_updates, block_access_list)
+    }
 
-        self.finalize_payload_with_state_root(context, state_root, account_updates, block_access_list)
+    fn body_roots(context: &PayloadBuildContext) -> (H256, H256) {
+        rayon::join(
+            || compute_transactions_root(&context.payload.body.transactions, &NativeCrypto),
+            || compute_receipts_root(&context.receipts, &NativeCrypto),
+        )
     }
 
     /// `finalize_payload` for a caller that already holds the post-state root.
-    ///
-    /// A builder that advances one trie across successive payloads on the same
-    /// parent computes the root incrementally, so re-deriving it here would
-    /// repeat the whole walk. Every other header field is filled exactly as
-    /// `finalize_payload` fills it; only the source of `state_root` differs.
     pub fn finalize_payload_with_state_root(
         &self,
         context: &mut PayloadBuildContext,
         state_root: H256,
+        (receipts_root, logs_bloom): (H256, Bloom),
+        account_updates: Vec<AccountUpdate>,
+        block_access_list: Option<BlockAccessList>,
+    ) -> Result<(), ChainError> {
+        let transactions_root =
+            compute_transactions_root(&context.payload.body.transactions, &NativeCrypto);
+        self.finalize_payload_with_roots(
+            context,
+            state_root,
+            (transactions_root, receipts_root),
+            Some(logs_bloom),
+            account_updates,
+            block_access_list,
+        )
+    }
+
+    fn finalize_payload_with_roots(
+        &self,
+        context: &mut PayloadBuildContext,
+        state_root: H256,
+        (transactions_root, receipts_root): (H256, H256),
+        logs_bloom: Option<Bloom>,
         account_updates: Vec<AccountUpdate>,
         block_access_list: Option<BlockAccessList>,
     ) -> Result<(), ChainError> {
         context.payload.header.state_root = state_root;
-        context.payload.header.transactions_root =
-            compute_transactions_root(&context.payload.body.transactions, &NativeCrypto);
-        context.payload.header.receipts_root =
-            compute_receipts_root(&context.receipts, &NativeCrypto);
+        context.payload.header.transactions_root = transactions_root;
+        context.payload.header.receipts_root = receipts_root;
         context.payload.header.requests_hash = context
             .requests
             .as_ref()
@@ -1343,14 +1365,15 @@ impl Blockchain {
             ));
         }
 
-        let mut logs = vec![];
-        for receipt in context.receipts.iter().cloned() {
-            for log in receipt.logs {
-                logs.push(log);
+        context.payload.header.logs_bloom = logs_bloom.unwrap_or_else(|| {
+            let mut logs = vec![];
+            for receipt in context.receipts.iter().cloned() {
+                for log in receipt.logs {
+                    logs.push(log);
+                }
             }
-        }
-
-        context.payload.header.logs_bloom = bloom_from_logs(&logs, &NativeCrypto);
+            bloom_from_logs(&logs, &NativeCrypto)
+        });
         Ok(())
     }
 }
