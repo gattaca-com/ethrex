@@ -217,6 +217,7 @@ pub struct GeneralizedDatabase {
     pub codes: FxHashMap<H256, Code>,
     pub code_metadata: FxHashMap<H256, CodeMetadata>,
     pub tx_backup: Option<CallFrameBackup>,
+    pub keep_tx_backup: bool,
     /// Optional BAL recorder for EIP-7928 Block Access List recording.
     pub bal_recorder: Option<BlockAccessListRecorder>,
     /// When true, skip cloning accounts into `initial_accounts_state` on load.
@@ -242,6 +243,7 @@ impl GeneralizedDatabase {
             initial_accounts_state: Default::default(),
             shared_base: None,
             tx_backup: None,
+            keep_tx_backup: false,
             codes: Default::default(),
             code_metadata: Default::default(),
             bal_recorder: None,
@@ -276,6 +278,7 @@ impl GeneralizedDatabase {
             initial_accounts_state: Default::default(),
             shared_base: Some(shared_base),
             tx_backup: None,
+            keep_tx_backup: false,
             codes: FxHashMap::with_capacity_and_hasher(capacity / 4, Default::default()),
             code_metadata: Default::default(),
             bal_recorder: None,
@@ -336,6 +339,7 @@ impl GeneralizedDatabase {
             initial_accounts_state: levm_accounts,
             shared_base: None,
             tx_backup: None,
+            keep_tx_backup: false,
             codes,
             code_metadata: Default::default(),
             bal_recorder: None,

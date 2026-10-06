@@ -1046,7 +1046,10 @@ impl<'a> VM<'a> {
         // `BackupHook`, or L2 dropping it), and `add_hook` keeps it in sync for the `BackupHook`
         // that `stateless_execute` installs after construction. L1 block execution installs no
         // `BackupHook` (see `l1_hooks`), so the backup is dead once the cache is restored.
-        let hooks = get_hooks(&vm_type);
+        let mut hooks = get_hooks(&vm_type);
+        if db.keep_tx_backup && matches!(vm_type, VMType::L1) {
+            hooks.push(Rc::new(RefCell::new(BackupHook::default())));
+        }
         let preserve_top_level_backup = hooks
             .iter()
             .any(|hook| hook.borrow().reads_top_level_backup());
