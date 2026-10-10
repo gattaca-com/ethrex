@@ -1282,12 +1282,10 @@ impl Blockchain {
         &self,
         context: &mut PayloadBuildContext,
         state_root: H256,
-        (receipts_root, logs_bloom): (H256, Bloom),
+        (transactions_root, receipts_root, logs_bloom): (H256, H256, Bloom),
         account_updates: Vec<AccountUpdate>,
         block_access_list: Option<BlockAccessList>,
     ) -> Result<(), ChainError> {
-        let transactions_root =
-            compute_transactions_root(&context.payload.body.transactions, &NativeCrypto);
         self.finalize_payload_with_roots(
             context,
             state_root,
