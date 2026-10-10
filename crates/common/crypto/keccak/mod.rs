@@ -33,14 +33,19 @@ mod imp {
     }
 
     unsafe extern "C" {
-        #[link_name = "SHA3_absorb"]
-        unsafe fn SHA3_absorb(state: *mut State, buf: *const u8, len: usize, r: usize) -> usize;
-        unsafe fn SHA3_squeeze(state: *mut State, buf: *mut u8, len: usize, r: usize);
+        #[link_name = "ethrex_SHA3_absorb"]
+        unsafe fn ethrex_SHA3_absorb(
+            state: *mut State,
+            buf: *const u8,
+            len: usize,
+            r: usize,
+        ) -> usize;
+        unsafe fn ethrex_SHA3_squeeze(state: *mut State, buf: *mut u8, len: usize, r: usize);
     }
 
     static SCALAR: Backend = Backend {
-        absorb: SHA3_absorb,
-        squeeze: SHA3_squeeze,
+        absorb: ethrex_SHA3_absorb,
+        squeeze: ethrex_SHA3_squeeze,
     };
 
     #[cfg(all(target_arch = "x86_64", feature = "std"))]
@@ -76,7 +81,11 @@ mod imp {
     }
 
     pub fn keccak_hash(data: impl AsRef<[u8]>) -> [u8; 32] {
-        hash_with(backend(), data.as_ref())
+        let data = data.as_ref();
+        if data.len() <= memo::MAX_LEN {
+            return memo::hash(data);
+        }
+        hash_with(backend(), data)
     }
 
     /// Hashes straight from the input instead of going through `Keccak256`: the streaming state
@@ -102,6 +111,77 @@ mod imp {
             (backend.squeeze)(&mut state, hash.as_mut_ptr(), hash.len(), BLOCK_SIZE);
         }
         hash
+    }
+
+    /// Small inputs (addresses, slot keys, log topics, mapping keys) recur across a block's
+    /// replays far more often than they change, so their hashes are kept in a direct-mapped
+    /// table. Each entry is a seqlock over atomics: a reader only trusts a full, unchanged copy
+    /// of the input and length, so a hit is exactly the keccak of the same bytes.
+    mod memo {
+        use core::sync::atomic::{AtomicU64, Ordering, fence};
+
+        pub const MAX_LEN: usize = 64;
+        const ENTRIES: usize = 1 << 15;
+        const WORDS: usize = 14;
+
+        #[allow(clippy::declare_interior_mutable_const)]
+        const ZERO: AtomicU64 = AtomicU64::new(0);
+        #[allow(clippy::declare_interior_mutable_const)]
+        const ENTRY: [AtomicU64; WORDS] = [ZERO; WORDS];
+        static TABLE: [[AtomicU64; WORDS]; ENTRIES] = [ENTRY; ENTRIES];
+
+        pub fn hash(data: &[u8]) -> [u8; 32] {
+            let mut input = [0u64; 8];
+            for (word, chunk) in input.iter_mut().zip(data.chunks(8)) {
+                let mut bytes = [0u8; 8];
+                bytes[..chunk.len()].copy_from_slice(chunk);
+                *word = u64::from_le_bytes(bytes);
+            }
+            let len = data.len() as u64;
+            let mut index = len.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+            for word in input {
+                index = (index.rotate_left(5) ^ word).wrapping_mul(0x517c_c1b7_2722_0a95);
+            }
+            #[allow(clippy::indexing_slicing)]
+            let entry = &TABLE[(index >> 49) as usize & (ENTRIES - 1)];
+
+            let seq = entry[0].load(Ordering::Acquire);
+            if seq & 1 == 0 && entry[1].load(Ordering::Relaxed) == len + 1 {
+                let same = input
+                    .iter()
+                    .zip(&entry[2..10])
+                    .all(|(word, slot)| *word == slot.load(Ordering::Relaxed));
+                let mut out = [0u8; 32];
+                for (chunk, slot) in out.chunks_mut(8).zip(&entry[10..14]) {
+                    chunk.copy_from_slice(&slot.load(Ordering::Relaxed).to_le_bytes());
+                }
+                fence(Ordering::Acquire);
+                if same && entry[0].load(Ordering::Relaxed) == seq {
+                    return out;
+                }
+            }
+
+            let out = super::hash_with(super::backend(), data);
+
+            if seq & 1 == 0
+                && entry[0]
+                    .compare_exchange(seq, seq + 1, Ordering::Relaxed, Ordering::Relaxed)
+                    .is_ok()
+            {
+                fence(Ordering::Release);
+                entry[1].store(len + 1, Ordering::Relaxed);
+                for (word, slot) in input.iter().zip(&entry[2..10]) {
+                    slot.store(*word, Ordering::Relaxed);
+                }
+                for (chunk, slot) in out.chunks(8).zip(&entry[10..14]) {
+                    let mut bytes = [0u8; 8];
+                    bytes.copy_from_slice(chunk);
+                    slot.store(u64::from_le_bytes(bytes), Ordering::Relaxed);
+                }
+                entry[0].store(seq + 2, Ordering::Release);
+            }
+            out
+        }
     }
 
     #[derive(Clone)]

@@ -267,10 +267,10 @@ __KeccakF1600:
 .cfi_endproc
 .size	__KeccakF1600,.-__KeccakF1600
 
-.globl	KeccakF1600
-.type	KeccakF1600,@function
+.globl	ethrex_KeccakF1600
+.type	ethrex_KeccakF1600,@function
 .align	32
-KeccakF1600:
+ethrex_KeccakF1600:
 .cfi_startproc
 	.byte	0xf3,0x0f,0x1e,0xfa
 
@@ -336,11 +336,11 @@ KeccakF1600:
 .cfi_restore	%rbx
 	.byte	0xf3,0xc3
 .cfi_endproc	
-.size	KeccakF1600,.-KeccakF1600
-.globl	SHA3_absorb
-.type	SHA3_absorb,@function
+.size	ethrex_KeccakF1600,.-ethrex_KeccakF1600
+.globl	ethrex_SHA3_absorb
+.type	ethrex_SHA3_absorb,@function
 .align	32
-SHA3_absorb:
+ethrex_SHA3_absorb:
 .cfi_startproc
 	.byte	0xf3,0x0f,0x1e,0xfa
 
@@ -435,11 +435,11 @@ SHA3_absorb:
 .cfi_restore	%rbx
 	.byte	0xf3,0xc3
 .cfi_endproc	
-.size	SHA3_absorb,.-SHA3_absorb
-.globl	SHA3_squeeze
-.type	SHA3_squeeze,@function
+.size	ethrex_SHA3_absorb,.-ethrex_SHA3_absorb
+.globl	ethrex_SHA3_squeeze
+.type	ethrex_SHA3_squeeze,@function
 .align	32
-SHA3_squeeze:
+ethrex_SHA3_squeeze:
 .cfi_startproc
 	.byte	0xf3,0x0f,0x1e,0xfa
 
@@ -480,7 +480,7 @@ SHA3_squeeze:
 	jnz	.Loop_squeeze
 
 	movq	%rdi,%rcx
-	call	KeccakF1600
+	call	ethrex_KeccakF1600
 	movq	%rdi,%r8
 	movq	%r14,%rcx
 	jmp	.Loop_squeeze
@@ -502,7 +502,7 @@ SHA3_squeeze:
 .cfi_restore	%r14
 	.byte	0xf3,0xc3
 .cfi_endproc	
-.size	SHA3_squeeze,.-SHA3_squeeze
+.size	ethrex_SHA3_squeeze,.-ethrex_SHA3_squeeze
 .align	256
 .quad	0,0,0,0,0,0,0,0
 .type	iotas,@object
