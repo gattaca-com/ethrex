@@ -212,9 +212,9 @@ Loop:
 	ret
 // .size	KeccakF1600_int,.-KeccakF1600_int
 
-// .type	KeccakF1600,%function
+// .type	ethrex_KeccakF1600,%function
 .align	5
-KeccakF1600:
+ethrex_KeccakF1600:
 .inst	0xd503233f			// paciasp
 	stp	x29,x30,[sp,#-16*8]!
 	add	x29,sp,#0
@@ -269,12 +269,12 @@ KeccakF1600:
 	ldp	x29,x30,[sp],#16*8
 .inst	0xd50323bf			// autiasp
 	ret
-// .size	KeccakF1600,.-KeccakF1600
+// .size	ethrex_KeccakF1600,.-ethrex_KeccakF1600
 
-.globl	SHA3_absorb
-// .type	SHA3_absorb,%function
+.globl	ethrex_SHA3_absorb
+// .type	ethrex_SHA3_absorb,%function
 .align	5
-SHA3_absorb:
+ethrex_SHA3_absorb:
 .inst	0xd503233f			// paciasp
 	stp	x29,x30,[sp,#-16*8]!
 	add	x29,sp,#0
@@ -468,11 +468,11 @@ Labsorbed:
 	ldp	x29,x30,[sp],#16*8
 .inst	0xd50323bf			// autiasp
 	ret
-// .size	SHA3_absorb,.-SHA3_absorb
-.globl	SHA3_squeeze
-// .type	SHA3_squeeze,%function
+// .size	ethrex_SHA3_absorb,.-ethrex_SHA3_absorb
+.globl	ethrex_SHA3_squeeze
+// .type	ethrex_SHA3_squeeze,%function
 .align	5
-SHA3_squeeze:
+ethrex_SHA3_squeeze:
 .inst	0xd503233f			// paciasp
 	stp	x29,x30,[sp,#-6*8]!
 	add	x29,sp,#0
@@ -501,7 +501,7 @@ Loop_squeeze:
 	bhi	Loop_squeeze
 
 	mov	x0,x19
-	bl	KeccakF1600
+	bl	ethrex_KeccakF1600
 	mov	x0,x19
 	mov	x3,x22
 	b	Loop_squeeze
@@ -540,7 +540,7 @@ Lsqueeze_done:
 	ldp	x29,x30,[sp],#6*8
 .inst	0xd50323bf			// autiasp
 	ret
-// .size	SHA3_squeeze,.-SHA3_squeeze
+// .size	ethrex_SHA3_squeeze,.-ethrex_SHA3_squeeze
 // .type	KeccakF1600_ce,%function
 .align	5
 KeccakF1600_ce:
@@ -688,10 +688,10 @@ KeccakF1600_cext:
 .inst	0xd50323bf		// autiasp
 	ret
 // .size	KeccakF1600_cext,.-KeccakF1600_cext
-.globl	SHA3_absorb_cext
-// .type	SHA3_absorb_cext,%function
+.globl	ethrex_SHA3_absorb_cext
+// .type	ethrex_SHA3_absorb_cext,%function
 .align	5
-SHA3_absorb_cext:
+ethrex_SHA3_absorb_cext:
 .inst	0xd503233f		// paciasp
 	stp	x29,x30,[sp,#-2*8 -64]!
 	add	x29,sp,#0
@@ -789,11 +789,11 @@ Labsorbed_ce:
 	ldp	x29,x30,[sp],#2*8 +64
 .inst	0xd50323bf		// autiasp
 	ret
-// .size	SHA3_absorb_cext,.-SHA3_absorb_cext
-.globl	SHA3_squeeze_cext
-// .type	SHA3_squeeze_cext,%function
+// .size	ethrex_SHA3_absorb_cext,.-ethrex_SHA3_absorb_cext
+.globl	ethrex_SHA3_squeeze_cext
+// .type	ethrex_SHA3_squeeze_cext,%function
 .align	5
-SHA3_squeeze_cext:
+ethrex_SHA3_squeeze_cext:
 .inst	0xd503233f		// paciasp
 	stp	x29,x30,[sp,#-2*8]!
 	add	x29,sp,#0
@@ -854,6 +854,6 @@ Lsqueeze_done_ce:
 	ldr	x29,[sp],#2*8
 .inst	0xd50323bf		// autiasp
 	ret
-// .size	SHA3_squeeze_cext,.-SHA3_squeeze_cext
+// .size	ethrex_SHA3_squeeze_cext,.-ethrex_SHA3_squeeze_cext
 .byte	75,101,99,99,97,107,45,49,54,48,48,32,97,98,115,111,114,98,32,97,110,100,32,115,113,117,101,101,122,101,32,102,111,114,32,65,82,77,118,56,44,32,67,82,89,80,84,79,71,65,77,83,32,98,121,32,64,100,111,116,45,97,115,109,0
 .align	2
