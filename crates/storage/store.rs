@@ -41,7 +41,7 @@ use ethrex_rlp::{
     encode::RLPEncode,
     error::RLPDecodeError,
 };
-use ethrex_trie::{EMPTY_TRIE_HASH, Nibbles, Trie, TrieLogger, TrieNode, TrieWitness};
+use ethrex_trie::{EMPTY_TRIE_HASH, Nibbles, Trie, TrieDB, TrieLogger, TrieNode, TrieWitness};
 use ethrex_trie::{Node, NodeRLP};
 use indexmap::IndexMap;
 use lru::LruCache;
@@ -4305,7 +4305,24 @@ impl Store {
     /// Doesn't check if the state root is valid
     /// Used for internal store operations
     pub fn open_state_trie(&self, state_root: H256) -> Result<Trie, StoreError> {
-        let trie_db = TrieWrapper::new(
+        self.open_state_trie_with(state_root, |db| db)
+    }
+
+    /// `open_state_trie` with its node reads going through `wrap`, e.g. a cache.
+    pub fn open_state_trie_with(
+        &self,
+        state_root: H256,
+        wrap: impl FnOnce(Box<dyn TrieDB>) -> Box<dyn TrieDB>,
+    ) -> Result<Trie, StoreError> {
+        Ok(Trie::open(
+            wrap(self.state_trie_db(state_root)?),
+            state_root,
+        ))
+    }
+
+    /// The node store behind the state trie at `state_root`, keyed by path from the root.
+    pub fn state_trie_db(&self, state_root: H256) -> Result<Box<dyn TrieDB>, StoreError> {
+        Ok(Box::new(TrieWrapper::new(
             state_root,
             self.gated_snapshot(state_root)?,
             Box::new(BackendTrieDB::new_for_accounts(
@@ -4313,8 +4330,7 @@ impl Store {
                 self.last_written()?,
             )?),
             None,
-        );
-        Ok(Trie::open(Box::new(trie_db), state_root))
+        )))
     }
 
     /// Obtain a state trie from the given state root
@@ -4354,7 +4370,30 @@ impl Store {
         state_root: H256,
         storage_root: H256,
     ) -> Result<Trie, StoreError> {
-        let trie_db = TrieWrapper::new(
+        self.open_storage_trie_with(account_hash, state_root, storage_root, |db| db)
+    }
+
+    /// `open_storage_trie` with its node reads going through `wrap`, e.g. a cache.
+    pub fn open_storage_trie_with(
+        &self,
+        account_hash: H256,
+        state_root: H256,
+        storage_root: H256,
+        wrap: impl FnOnce(Box<dyn TrieDB>) -> Box<dyn TrieDB>,
+    ) -> Result<Trie, StoreError> {
+        Ok(Trie::open(
+            wrap(self.storage_trie_db(account_hash, state_root)?),
+            storage_root,
+        ))
+    }
+
+    /// The node store behind an account's storage trie at `state_root`, keyed by path.
+    pub fn storage_trie_db(
+        &self,
+        account_hash: H256,
+        state_root: H256,
+    ) -> Result<Box<dyn TrieDB>, StoreError> {
+        Ok(Box::new(TrieWrapper::new(
             state_root,
             self.gated_snapshot(state_root)?,
             Box::new(BackendTrieDB::new_for_storages(
@@ -4362,8 +4401,7 @@ impl Store {
                 self.last_written()?,
             )?),
             Some(account_hash),
-        );
-        Ok(Trie::open(Box::new(trie_db), storage_root))
+        )))
     }
 
     /// Open a state trie using pre-acquired shared resources.
