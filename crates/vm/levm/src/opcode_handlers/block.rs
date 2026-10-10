@@ -72,6 +72,9 @@ impl OpcodeHandler for OpCoinbaseHandler {
         vm.current_call_frame
             .stack
             .push(address_to_word(vm.env.coinbase))?;
+        if let Some(reads) = vm.db.tx_reads.as_mut().filter(|_| !vm.db.reads_paused) {
+            reads.coinbase_address = true;
+        }
 
         Ok(OpcodeResult::Continue)
     }
@@ -168,6 +171,9 @@ impl OpcodeHandler for OpSelfBalanceHandler {
 
         let address = vm.current_call_frame.to;
         let balance = vm.db.get_account(address)?.info.balance;
+        if let Some(reads) = vm.db.tx_reads.as_mut().filter(|_| !vm.db.reads_paused) {
+            reads.balances.push(address);
+        }
 
         // Record address touch for BAL per EIP-7928
         // SELFBALANCE has "Pre-state Cost: None" so always succeeds
