@@ -730,6 +730,9 @@ impl OpcodeHandler for OpSelfDestructHandler {
 
         let target_account_is_empty = vm.db.get_account(beneficiary)?.is_empty();
         let balance = vm.db.get_account(to)?.info.balance;
+        if let Some(reads) = vm.db.tx_reads.as_mut().filter(|_| !vm.db.reads_paused) {
+            reads.balances.push(to);
+        }
 
         // EIP-7928 (Amsterdam): Two-phase gas check for SELFDESTRUCT.
         // Base cost was checked above before state access; now record BAL
@@ -963,6 +966,10 @@ impl<'a> VM<'a> {
         // 1. Sender doesn't have enough balance to send value.
         // 2. Depth limit has been reached
         // 3. Sender nonce is max.
+        if !value.is_zero() {
+            self.db
+                .record_balance_check(deployer, deployer_balance, value);
+        }
         let checks = [
             (deployer_balance < value, "OutOfFund"),
             (new_depth > 1024, "MaxDepth"),
@@ -1229,6 +1236,8 @@ impl<'a> VM<'a> {
         // Validate sender has enough value
         if should_transfer_value && !value.is_zero() {
             let sender_balance = self.db.get_account(msg_sender)?.info.balance;
+            self.db
+                .record_balance_check(msg_sender, sender_balance, value);
             if sender_balance < value {
                 // EIP-8037: no account is created, refund the new-account state gas.
                 self.refund_new_account_state_gas(new_account_charged)?;

@@ -214,9 +214,15 @@ pub fn code_from_bal(new_code: &bytes::Bytes) -> (H256, Option<Code>) {
 pub struct TxReads {
     pub accounts: SeededHashMap<Address, AccountSnapshot>,
     pub slots: SeededHashMap<(Address, H256), U256>,
-    /// Accounts whose balance the transaction itself inspected (`BALANCE`, `SELFBALANCE`), as
-    /// opposed to loading the account only to move value or gas.
+    /// Accounts whose balance the transaction itself inspected (`BALANCE`, `SELFBALANCE`,
+    /// `SELFDESTRUCT`, or a value check that failed), as opposed to loading the account only to
+    /// move value or gas.
     pub balances: Vec<Address>,
+    /// For an account whose balance only passed value checks: the least balance, as first read,
+    /// with which every check still passes. Every debit is behind such a check, so the
+    /// transaction runs the same from any first-read balance at or above it, other than through
+    /// `balances` or the account turning empty.
+    pub floors: Vec<(Address, U256)>,
     /// The transaction read the block's coinbase address (`COINBASE`), so its outcome can depend
     /// on which builder built the block.
     pub coinbase_address: bool,
@@ -605,6 +611,29 @@ impl GeneralizedDatabase {
         let metadata = self.get_code_metadata(code_hash)?;
         #[expect(clippy::as_conversions, reason = "same sized types (on 64bit)")]
         Ok(metadata.length as usize)
+    }
+
+    /// Records, for `tx_reads`, that `address` holding `held` was checked to cover `required`.
+    pub fn record_balance_check(&mut self, address: Address, held: U256, required: U256) {
+        if self.reads_paused {
+            return;
+        }
+        let Some(reads) = self.tx_reads.as_mut() else {
+            return;
+        };
+        let first = reads
+            .accounts
+            .get(&address)
+            .map(|account| account.info.balance);
+        let (Some(first), Some(slack)) = (first, held.checked_sub(required)) else {
+            reads.balances.push(address);
+            return;
+        };
+        let floor = first.saturating_sub(slack);
+        match reads.floors.iter_mut().find(|(a, _)| *a == address) {
+            Some((_, at)) => *at = (*at).max(floor),
+            None => reads.floors.push((address, floor)),
+        }
     }
 
     /// Gets the storage value of an account loaded before, caching it if not already cached,
@@ -1313,5 +1342,25 @@ mod tx_reads_tests {
         assert_eq!(reads.accounts[&holder()].info.balance, U256::from(10));
         assert_eq!(reads.slots[&(holder(), key)], U256::from(5));
         assert!(!reads.accounts.contains_key(&Address::repeat_byte(2)));
+    }
+
+    /// A passed value check SHALL keep, per account, the highest first-read balance it needed,
+    /// net of what the transaction credited before the check; a failed one SHALL count as
+    /// inspecting the balance.
+    #[test]
+    fn value_checks_keep_the_balance_they_needed() {
+        let mut db = GeneralizedDatabase::new(Arc::new(OneAccount));
+        db.tx_reads = Some(TxReads::default());
+
+        db.get_account_mut(holder()).unwrap().info.balance = U256::from(15);
+        db.record_balance_check(holder(), U256::from(15), U256::from(8));
+        db.record_balance_check(holder(), U256::from(15), U256::from(3));
+        db.record_balance_check(holder(), U256::from(15), U256::from(14));
+        let reads = db.tx_reads.as_ref().unwrap();
+        assert_eq!(reads.floors, vec![(holder(), U256::from(9))]);
+        assert!(reads.balances.is_empty());
+
+        db.record_balance_check(holder(), U256::from(15), U256::from(16));
+        assert_eq!(db.tx_reads.unwrap().balances, vec![holder()]);
     }
 }
