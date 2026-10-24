@@ -885,6 +885,8 @@ pub fn validate_sender_balance(vm: &mut VM<'_>, sender_balance: U256) -> Result<
     if sender_balance < balance_for_valid_tx {
         return Err(TxValidationError::InsufficientAccountFunds.into());
     }
+    vm.db
+        .record_balance_check(vm.env.origin, sender_balance, balance_for_valid_tx);
 
     Ok(())
 }
